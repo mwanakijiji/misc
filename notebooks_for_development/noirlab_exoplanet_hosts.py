@@ -5,6 +5,7 @@ from astropy.table import Table, join, Column
 import requests
 import xml.etree.ElementTree as ET
 import re
+import ipdb
 from astropy.table import MaskedColumn
 
 
@@ -12,8 +13,13 @@ import astroquery
 from astroquery.simbad import Simbad
 
 
-def main(transit_only=False):
+def main(transit_only=False,
+         v_mag_lim = 8.5,
+         dec_lim = np.array([10,60])):
+    
     # transit_only: do you want to show only transiting systems?
+    # v_mag_lim: dimmest star observable
+    # dec_lim: declination limits
 
     stem = '/Users/bandari/Documents/git.repos/misc/notebooks_for_development/'
 
@@ -149,13 +155,17 @@ def main(transit_only=False):
 
     # remove all rows not relevant to transits
     if transit_only == True:
-        df_all_planets_catalog = df_all_planets_catalog[df_all_planets_catalog['discoverymethod'] == 'Transit']
+        df_all_planets_catalog = df_all_planets_catalog[df_all_planets_catalog['tran_flag'] == 1]
+        plot_title = 'Transiting exoplanet systems'
         print('Transiting systems only')
     elif transit_only == False:
+        plot_title = 'All nearby exoplanet host stars'
         print('All exoplanet systems')
 
     # Group by the 'HD_NORM' column and aggregate using nanmedian for numerical columns, and first value in string columns
     df_all_systems_catalog = df_all_planets_catalog.groupby('HD_NORM').agg(lambda x: np.nanmedian(x) if np.issubdtype(x.dtype, np.number) else x.iloc[0])
+
+    ## ## REMOVE CONTROVERSIAL ONES
 
     # Reset the index to turn the grouped column back into a regular column
     df_all_systems_catalog.reset_index(inplace=True)
@@ -169,21 +179,81 @@ def main(transit_only=False):
     # merge
     df_all_systems_with_jmdc_measurements = pd.merge(df_all_systems_catalog, df_jmdc_catalog, on='HD_NORM', how='inner')
 
+    # make cut based on DEC
+    df_all_systems_catalog_cut = df_all_systems_catalog[np.logical_and(df_all_systems_catalog['dec'] <= dec_lim[1], df_all_systems_catalog['dec'] > dec_lim[0])]
+    df_all_systems_catalog_cut.reset_index(inplace=True)
+    print('DEC cut:',dec_lim)
+
+    # make cut to larger catalog based on brightness (V<8.5)
+    '''
+    import ipdb; ipdb.set_trace()
+    df_all_systems_catalog_cut = df_all_systems_catalog_cut[df_all_systems_catalog_cut['sy_vmag'] <= v_mag_lim]
+    df_all_systems_catalog_cut.reset_index(inplace=True)
+    df_all_systems_catalog_too_dim = df_all_systems_catalog[df_all_systems_catalog['sy_vmag'] > v_mag_lim] # these are probably too dim
+    df_all_systems_catalog_too_dim.reset_index(inplace=True)
+    '''
+    print('Vmag cut:',v_mag_lim)
+
+    # reassign
+    df_all_systems_catalog = df_all_systems_catalog_cut.copy(deep=True)
+
     # plot of all exoplanet host stars, and those with interferometric measurements
     plt.clf()
-    plt.title('All nearby exoplanet host stars') # with HD designation and known (at least approx.) stellar angular widths
+    plt.title(plot_title) # with HD designation and known (at least approx.) stellar angular widths
 
-    # Filter for finite angular width values
-    finite_mask_all = np.isfinite(df_all_systems_catalog['sy_dist']) & np.isfinite(df_all_systems_catalog['width_ang'])
+    # Filter for finite angular width values and sufficient brightness
+    finite_mask_all_systems_bright = (
+        np.isfinite(df_all_systems_catalog['sy_dist']) & 
+        np.isfinite(df_all_systems_catalog['width_ang']) & 
+        (df_all_systems_catalog['sy_vmag'] <= v_mag_lim)
+    )
+    finite_mask_all_systems_too_dim = (
+        np.isfinite(df_all_systems_catalog['sy_dist']) & 
+        np.isfinite(df_all_systems_catalog['width_ang']) & 
+        (df_all_systems_catalog['sy_vmag'] > v_mag_lim)
+    )
+
     finite_mask_jmdc = np.isfinite(df_all_systems_with_jmdc_measurements['sy_dist']) & np.isfinite(df_all_systems_with_jmdc_measurements['width_ang'])
 
-    plt.scatter(df_all_systems_catalog['sy_dist'][finite_mask_all], 1000 * df_all_systems_catalog['width_ang'][finite_mask_all], color='blue', label='Not interferometrically observed')
-    plt.scatter(df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc], 1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc], color='red', label='Observed')
+    ipdb.set_trace()
+    linear_marker_sizes_all_bright = (1e5) * np.power(10,(-df_all_systems_catalog['sy_vmag'][finite_mask_all_systems_bright].values/2.5))
+    linear_marker_sizes_jmdc = (1e5) * np.power(10,(-df_all_systems_with_jmdc_measurements['sy_vmag'][finite_mask_jmdc]/2.5))
+    # plot sufficiently bright systems, with markers sized according to brightness
+    plt.scatter(df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright], 1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright], 
+                s=linear_marker_sizes_all_bright, 
+                color='blue', edgecolor='black', label='Not interferometrically observed', zorder=3)
+    plt.scatter(df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc], 1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc],
+                s=linear_marker_sizes_jmdc, 
+                color='red', edgecolor='black', label='Observed', zorder=4)
+    plt.scatter(df_all_systems_catalog['sy_dist'][finite_mask_all_systems_too_dim], 1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_too_dim], 
+                s=40, 
+                color='gray', label='Too dim')
+    # annotate with names of host stars bright enough for interferometry
+    '''
+    for i in range(len(df_all_systems_with_jmdc_measurements[finite_mask_jmdc])):
+        plt.annotate(df_all_systems_with_jmdc_measurements['hostname'][finite_mask_jmdc].iloc[i],
+                (df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc].iloc[i], 
+                1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc].iloc[i]),
+                xytext = (df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc].iloc[i] + 1, 
+                          1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc].iloc[i] + 0.3),
+                fontsize=8, ha='left', va='bottom',
+                arrowprops=dict(arrowstyle='-', color='gray'))
+    '''
+        
+    for i in range(len(df_all_systems_catalog[finite_mask_all_systems_bright])):
+        plt.annotate(df_all_systems_catalog['hostname'][finite_mask_all_systems_bright].iloc[i],
+                (df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright].iloc[i], 
+                1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright].iloc[i]),
+                xytext = (df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright].iloc[i] + 1, 
+                          1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright].iloc[i] + 0.3),
+                fontsize=8, ha='left', va='bottom',
+                arrowprops=dict(arrowstyle='-', color='gray'))
     #plt.axhline(y=0.530, linestyle='--', color='gray') # longest wavel of CHARA/VEGA is 530 nm
     # plt.axhline(y=0.280, linestyle='--', color='gray')
-    plt.fill_betweenx([0, 0.530], x1=0, x2=45, color='gray', alpha=0.3)
-    plt.xlim([0,45])
-    plt.ylim([0,5.5])
+    plt.fill_betweenx([0, 0.530], x1=0, x2=np.max(df_all_systems_catalog['sy_dist']), color='gray', alpha=0.3, zorder=1)
+    plt.fill_betweenx([0, 0.150], x1=0, x2=np.max(df_all_systems_catalog['sy_dist']), color='gray', alpha=0.3, zorder=2)
+    #plt.xlim([0,125])
+    #plt.ylim([0,2.5])
     plt.xlabel('Dist (pc)')
     plt.ylabel('Approx angular width (mas)')
     plt.legend()
@@ -191,6 +261,6 @@ def main(transit_only=False):
     #plt.savefig('junk.png')
 
 if __name__ == "__main__":
-    main(transit_only = False)
-
-
+    main(transit_only = True, 
+         v_mag_lim = 8.5,
+         dec_lim = np.array([10,60]))
