@@ -156,6 +156,15 @@ def main(transit_only = False,
                 color='gray', 
                 s = 120,
                 label='Too dim')
+    # annotate the HD 86728 system
+    idx_hd86728 = neid_target_list_w_addl_info['Name'] == 'HD86728'
+    plt.annotate('HD 86728',
+        (neid_target_list_w_addl_info['dist'][idx_hd86728], 
+        1000 * neid_target_list_w_addl_info['width_ang'][idx_hd86728]),
+        xytext = (neid_target_list_w_addl_info['dist'][idx_hd86728] + 3, 
+                    1000 * neid_target_list_w_addl_info['width_ang'][idx_hd86728] + 1),
+        fontsize=15, ha='left', va='bottom',
+        arrowprops=dict(arrowstyle='-', color='gray'), zorder=0)
     plt.fill_betweenx([0, 0.530], x1=0, x2=45, color='gray', alpha=0.3) # longest wavel of CHARA/VEGA is 530 nm
     plt.xlim([0,45])
     plt.ylim([0,5.5])
