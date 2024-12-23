@@ -38,7 +38,6 @@ def main(transit_only = False,
     # Query Simbad using the object names from your table
     object_names = neid_targets['Name'] 
     neid_target_addl_info = custom_simbad.query_objects(object_names)
-    ipdb.set_trace()
 
     # I want the HD designation alone, to enable table merging. 
     # This function is to extract the string containing 'HD ' from the 'ids' field
@@ -120,23 +119,17 @@ def main(transit_only = False,
     # inner merger to get table of NEID targets observed with OLBI
     neid_targets_observed = join(neid_target_list_w_addl_info, jmdc_catalog, keys='HD_NORM', join_type='inner')
     neid_targets_observed = neid_targets_observed.group_by('Name').groups.aggregate(np.mean)
-    ipdb.set_trace()
-
-
 
     # make DataFrame to make masks, annotations easier
     df_neid_targets_observed = neid_targets_observed.to_pandas()
     df_neid_target_list_w_addl_info = neid_target_list_w_addl_info.to_pandas()
-    ipdb.set_trace()
 
     mask_all_neid_systems_bright = (df_neid_target_list_w_addl_info['Vmag'] <= v_mag_lim)
     mask_all_neid_systems_too_dim = (df_neid_target_list_w_addl_info['Vmag'] > v_mag_lim)
-    ipdb.set_trace()
 
-    marker_scale_factor_neid = 1e4
+    marker_scale_factor_neid = 5e4
     linear_marker_sizes_neid_bright = marker_scale_factor_neid * np.power(10,(-df_neid_target_list_w_addl_info['Vmag'][mask_all_neid_systems_bright].values/2.5))
     linear_marker_sizes_jmdc = marker_scale_factor_neid * np.power(10,(-neid_targets_observed['Vmag']/2.5))
-    ipdb.set_trace()
 
     plt.clf()
     plt.title('NEID targets', fontsize=fontsize)
@@ -150,20 +143,19 @@ def main(transit_only = False,
                 color='red', 
                 s = linear_marker_sizes_jmdc,
                 edgecolor='black')
-    # too dim
-    plt.scatter(neid_target_list_w_addl_info['dist'][mask_all_neid_systems_too_dim], 1000 * neid_target_list_w_addl_info['width_ang'][mask_all_neid_systems_too_dim], 
-                color='gray', 
-                s = 40,
-                edgecolor='black', 
-                label='Too dim')
     # for the legend
     plt.scatter(-999, -999, 
-                s=40, 
+                s=120, 
                 color='blue', edgecolor='black', label='Not interferometrically observed', zorder=3)
     # for the legend
     plt.scatter(-999, -999, 
-                s=40, 
+                s=120, 
                 color='red', edgecolor='black', label='Observed', zorder=3)
+    # too dim
+    plt.scatter(neid_target_list_w_addl_info['dist'][mask_all_neid_systems_too_dim], 1000 * neid_target_list_w_addl_info['width_ang'][mask_all_neid_systems_too_dim], 
+                color='gray', 
+                s = 120,
+                label='Too dim')
     plt.fill_betweenx([0, 0.530], x1=0, x2=45, color='gray', alpha=0.3) # longest wavel of CHARA/VEGA is 530 nm
     plt.xlim([0,45])
     plt.ylim([0,5.5])
@@ -174,7 +166,6 @@ def main(transit_only = False,
     leg = plt.legend(fontsize=fontsize, loc='upper right', fancybox=True, framealpha=1)
     leg.set_zorder(10)
     plt.show()
-    ipdb.set_trace()
 
     plt.clf()
     plt.title('NEID targets', fontsize=fontsize)
@@ -250,16 +241,8 @@ def main(transit_only = False,
     # make cut based on DEC
     df_all_systems_catalog_cut = df_all_systems_catalog[np.logical_and(df_all_systems_catalog['dec'] <= dec_lim[1], df_all_systems_catalog['dec'] > dec_lim[0])]
     df_all_systems_catalog_cut.reset_index(inplace=True)
+    
     print('DEC cut:',dec_lim)
-
-    # make cut to larger catalog based on brightness (V<8.5)
-    '''
-    import ipdb; ipdb.set_trace()
-    df_all_systems_catalog_cut = df_all_systems_catalog_cut[df_all_systems_catalog_cut['sy_vmag'] <= v_mag_lim]
-    df_all_systems_catalog_cut.reset_index(inplace=True)
-    df_all_systems_catalog_too_dim = df_all_systems_catalog[df_all_systems_catalog['sy_vmag'] > v_mag_lim] # these are probably too dim
-    df_all_systems_catalog_too_dim.reset_index(inplace=True)
-    '''
     print('Vmag cut:',v_mag_lim)
 
     # reassign
@@ -289,34 +272,45 @@ def main(transit_only = False,
     # not interferometrically observed (actually, points will get overplotted if already interferometrically observed)
     plt.scatter(df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright], 1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright], 
                 s=linear_marker_sizes_all_bright, 
-                color='blue', edgecolor='black', zorder=3)
+                color='blue', edgecolor='black', zorder=4)
     # for the legend
     plt.scatter(-999, -999, 
-                s=40, 
+                s=120, 
                 color='blue', edgecolor='black', label='Not interferometrically observed', zorder=3)
     # interferometrically observed
     plt.scatter(df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc], 1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc],
                 s=linear_marker_sizes_jmdc, 
-                color='red', edgecolor='black', zorder=4)
+                color='red', edgecolor='black', zorder=5)
     # for the legend
     plt.scatter(-999, -999, 
-                s=40, 
+                s=120, 
                 color='red', edgecolor='black', label='Observed', zorder=4)
     # too dim
     plt.scatter(df_all_systems_catalog['sy_dist'][finite_mask_all_systems_too_dim], 1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_too_dim], 
-                s=40, 
+                s=120, 
                 color='gray')
     # for the legend
     plt.scatter(-999, -999, 
-                s=40, 
-                color='gray', label='Too dim', zorder=4)
+                s=120, 
+                color='gray', label='Too dim', zorder=5)
     # annotate with names of host stars bright enough for interferometry
+    ipdb.set_trace()
     for i in range(len(df_all_systems_catalog[finite_mask_all_systems_bright])):
         plt.annotate(df_all_systems_catalog['hostname'][finite_mask_all_systems_bright].iloc[i],
                 (df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright].iloc[i], 
                 1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright].iloc[i]),
                 xytext = (df_all_systems_catalog['sy_dist'][finite_mask_all_systems_bright].iloc[i] + 1, 
                           1000 * df_all_systems_catalog['width_ang'][finite_mask_all_systems_bright].iloc[i] + 0.3),
+                fontsize=8, ha='left', va='bottom',
+                arrowprops=dict(arrowstyle='-', color='gray'), zorder=3)
+
+    # for some reason some of the observed systems are not annotated by the above; check later; for now, just annotate with another for-loop
+    for i in range(len(df_all_systems_with_jmdc_measurements[finite_mask_jmdc])):
+        plt.annotate(df_all_systems_with_jmdc_measurements['hostname'][finite_mask_jmdc].iloc[i],
+                (df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc].iloc[i], 
+                1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc].iloc[i]),
+                xytext = (df_all_systems_with_jmdc_measurements['sy_dist'][finite_mask_jmdc].iloc[i] + 1, 
+                          1000 * df_all_systems_with_jmdc_measurements['width_ang'][finite_mask_jmdc].iloc[i] + 0.3),
                 fontsize=8, ha='left', va='bottom',
                 arrowprops=dict(arrowstyle='-', color='gray'), zorder=3)
     plt.fill_betweenx([0, 0.530], x1=0, x2=np.max(df_all_systems_catalog['sy_dist']), color='gray', alpha=0.3, zorder=1) # longest wavel of CHARA/VEGA is 530 nm
@@ -337,8 +331,8 @@ def main(transit_only = False,
     #plt.savefig('junk.png')
 
 if __name__ == "__main__":
-    main(transit_only = False, 
-         rv_only = True,
+    main(transit_only = True, 
+         rv_only = False,
          v_mag_lim = 8.5,
          dec_lim = np.array([10,60]),
          fontsize = 20)
